@@ -1,39 +1,55 @@
-name: Real CI Pipeline
+name: Advanced CI Pipeline
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
   pull_request:
-    branches: ["main"]
-  workflow_dispatch: # 🔹 Ручной запуск из UI GitHub
-
-env:
-  CI_ENV: "production"
-  APP_VERSION: "1.0.0"
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
+  test-matrix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [18, 20]
+      fail-fast: false
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node ${{ matrix.node-version }}
         uses: actions/setup-node@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test
+        run: npm test
+
+  build-and-archive:
+    needs: test-matrix
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
-        env:
-          NODE_ENV: "production"
+      - run: npm ci
+      - run: npm run build
 
-      - name: Run build
-        run: npm run build
-
-      - name: Run tests
-        run: npm test
-        env:
-          TEST_MODE: "ci"
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-build-${{ github.run_number }}
+          path: dist/
+          retention-days: 7
