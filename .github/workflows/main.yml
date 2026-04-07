@@ -1,13 +1,22 @@
-name: Advanced CI Pipeline
+name: Production CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
   pull_request:
-    branches:
-      - main
+    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      deploy_env:
+        description: "🌍 Target environment"
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+
+env:
+  CI: true
+  NODE_ENV: production
 
 jobs:
   test-matrix:
@@ -17,49 +26,54 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         node-version: [18, 20]
       fail-fast: false
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run test
-        run: npm test
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - run: npm ci
+      - run: npm test
 
   build-and-archive:
     needs: test-matrix
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run build
-        run: npm run build
-
-      - name: Prepare & verify dist
-        run: |
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci
+      - run: npm run build
+      - run: |
           mkdir -p dist
-          echo "Built on $(date) | Run #${{ github.run_number }}" > dist/bundle.txt
-          echo "Содержимое dist/:"
+          echo "✅ Built on $(date) | Run #${{ github.run_number }}" > dist/bundle.txt
           ls -la dist/
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: dist-build-${{ github.run_number }}
           path: dist/
           retention-days: 7
+
+  deploy:
+    needs: [test-matrix, build-and-archive]
+    runs-on: ubuntu-latest
+    # Запускается ТОЛЬКО при пуше в main ИЛИ при ручном запуске с параметрами
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🚀 Simulate Deployment
+        run: |
+          ENV="${{ github.event.inputs.deploy_env || 'staging' }}"
+          echo "📦 Deploying version ${{ github.run_number }} to $ENV..."
+
+          # Имитация запроса к серверу деплоя с передачей секрета
+          curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"env\": \"$ENV\", \"version\": \"${{ github.run_number }}\"}" \
+            https://httpbin.org/post
+            
+          echo "✅ Deployment simulation finished."
+          echo "🔒 Token used: ${{ secrets.DEPLOY_TOKEN }}"
