@@ -1,1 +1,1 @@
-throw new Error('💥 CI BREAKER');
+console.log('GitHub Actions готов!');
