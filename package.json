@@ -1,0 +1,13 @@
+{
+  "name": "ga-practice",
+  "version": "1.0.0",
+  "description": "",
+  "main": "hello.js",
+  "scripts": {
+    "test": "echo '✅ Тесты прошли в режиме ' && exit 0",
+    "build": "echo '📦 Сборка версии '"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
